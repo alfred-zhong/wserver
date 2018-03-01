@@ -2,7 +2,10 @@ package wserver
 
 import (
 	"io"
+	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/gorilla/websocket"
 )
@@ -16,7 +19,19 @@ type Conn struct {
 	AfterReadFunc   func(messageType int, r io.Reader)
 	BeforeCloseFunc func()
 
+	once   sync.Once
+	id     string
 	stopCh chan struct{}
+}
+
+// GetID returns the id generated using UUID algorithm.
+func (c *Conn) GetID() string {
+	c.once.Do(func() {
+		u := uuid.New()
+		c.id = u.String()
+	})
+
+	return c.id
 }
 
 // Listen keeps receiving data from DataChan and writes it to the websocket
