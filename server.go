@@ -24,16 +24,16 @@ var defaultUpgrader = &websocket.Upgrader{
 
 // Server defines parameters for running websocket server.
 type Server struct {
-	// Path for websocket request. default "/ws".
+	// Path for websocket request, default "/ws".
 	WSPath string
 
 	// Path for send message, default "/send".
 	SendPath string
 
-	// Upgrader is for upgrade connection to websocket connection.
-	// "github.com/gorilla/websocket" is used.
+	// Upgrader is for upgrade connection to websocket connection using
+	// "github.com/gorilla/websocket".
 	//
-	// if Upgrader is nil, default upgrader will be used. Default upgrader is
+	// If Upgrader is nil, default upgrader will be used. Default upgrader is
 	// set ReadBufferSize and WriteBufferSize to 1024, and CheckOrigin always
 	// returns true
 	Upgrader *websocket.Upgrader
