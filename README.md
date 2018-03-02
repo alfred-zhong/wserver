@@ -2,4 +2,4 @@
 Tool for setup server with WebSocket
 
 * basic feature ok
-* add more tests --- in process
+* add more tests(not stable) --- in process
