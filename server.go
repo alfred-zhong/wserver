@@ -41,18 +41,27 @@ type Server struct {
 
 // Listen listens on the TCP network address addr.
 func (s *Server) Listen(addr string) error {
-	// Websocket 接口
-	wh := websocketHandler{s.Upgrader}
+	b := &binder{
+		userID2EventConnMap: make(map[string]*[]eventConn),
+		connID2UserIDMap:    make(map[string]string),
+	}
+
+	// websocket request handler
+	wh := websocketHandler{
+		upgrader: s.Upgrader,
+		binder:   b,
+	}
 	if wh.upgrader == nil {
 		wh.upgrader = defaultUpgrader
 	}
 	http.Handle(s.WSPath, &wh)
 
-	// 发送接口
-	sh := sendHandler{}
+	// send request handler
+	sh := sendHandler{
+		binder: b,
+	}
 	http.Handle(s.SendPath, &sh)
 
-	// 启动 HTTP 服务
 	return http.ListenAndServe(addr, nil)
 }
 

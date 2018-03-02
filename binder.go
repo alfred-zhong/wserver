@@ -80,7 +80,6 @@ func (b *binder) Unbind(conn *Conn) error {
 				newEConns := append((*eConns)[:i], (*eConns)[i+1:]...)
 				b.userID2EventConnMap[userID] = &newEConns
 				delete(b.connID2UserIDMap, conn.GetID())
-				close(conn.DataChan)
 
 				// delete the key of userID when the length of the related
 				// eventConn slice is 0.
@@ -98,29 +97,26 @@ func (b *binder) Unbind(conn *Conn) error {
 	return fmt.Errorf("can't find the eventConns by userID: %s", userID)
 }
 
-// FilterEventConn searchs the eventConns related to userID, and filtered by
-// evevnt. The userID can't be empty. All the eventConns related to the userID
+// FilterConn searchs the conns related to userID, and filtered by
+// event. The userID can't be empty. All the conns related to the userID
 // will be returned if the event is empty.
-func (b *binder) FilterEventConn(userID, event string) ([]eventConn, error) {
+func (b *binder) FilterConn(userID, event string) ([]*Conn, error) {
 	if userID == "" {
 		return nil, errors.New("userID can't be empty")
 	}
 
-	if eConns, ok := b.userID2EventConnMap[userID]; ok {
-		if event == "" {
-			ecs := make([]eventConn, len(*eConns))
-			copy(ecs, *eConns)
-			return ecs, nil
-		}
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
-		ecs := make([]eventConn, 0, len(*eConns))
+	if eConns, ok := b.userID2EventConnMap[userID]; ok {
+		ecs := make([]*Conn, 0, len(*eConns))
 		for i := range *eConns {
 			if (*eConns)[i].Event == event {
-				ecs = append(ecs, (*eConns)[i])
+				ecs = append(ecs, (*eConns)[i].Conn)
 			}
 		}
 		return ecs, nil
 	}
 
-	return []eventConn{}, nil
+	return []*Conn{}, nil
 }

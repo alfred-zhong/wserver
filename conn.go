@@ -6,15 +6,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 	"github.com/gorilla/websocket"
 )
 
-// Conn wraps websocket.Conn with Conn. It defines to receive data from
-// DataChan and write to Conn. Also it will listen and read data from Conn.
+// Conn wraps websocket.Conn with Conn. It defines to listen and read
+// data from Conn.
 type Conn struct {
-	Conn     *websocket.Conn
-	DataChan chan []byte
+	Conn *websocket.Conn
 
 	AfterReadFunc   func(messageType int, r io.Reader)
 	BeforeCloseFunc func()
@@ -22,6 +20,16 @@ type Conn struct {
 	once   sync.Once
 	id     string
 	stopCh chan struct{}
+}
+
+// Write write p to the websocket connection. The error returned will always
+// be nil if success.
+func (c *Conn) Write(p []byte) (n int, err error) {
+	err = c.Conn.WriteMessage(websocket.TextMessage, p)
+	if err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 // GetID returns the id generated using UUID algorithm.
@@ -34,10 +42,8 @@ func (c *Conn) GetID() string {
 	return c.id
 }
 
-// Listen keeps receiving data from DataChan and writes it to the websocket
-// connection. It returns until the DataChan closed or get an error from
-// reading from websocket connection. The error returned is not nil when write
-// data to websocket connection fails.
+// Listen listens for receive data from websocket connection. It blocks
+// until websocket connection is closed.
 func (c *Conn) Listen() (err error) {
 	c.Conn.SetCloseHandler(func(code int, text string) error {
 		if c.BeforeCloseFunc != nil {
@@ -49,27 +55,8 @@ func (c *Conn) Listen() (err error) {
 		return nil
 	})
 
-	go c.read()
-
-ReceiveFromChan:
-	for {
-		select {
-		case <-c.stopCh:
-			break ReceiveFromChan
-		case data, ok := <-c.DataChan:
-			if ok {
-				// TODO: messageType may be customized
-				err = c.Conn.WriteMessage(websocket.TextMessage, data)
-				if err != nil {
-					break ReceiveFromChan
-				}
-			} else {
-				break ReceiveFromChan
-			}
-		}
-	}
-
-	return
+	c.read()
+	return nil
 }
 
 // Keeps reading from Conn util get error.
@@ -90,10 +77,9 @@ func (c *Conn) read() {
 }
 
 // NewConn wraps conn.
-func NewConn(conn *websocket.Conn, dataChan chan []byte) *Conn {
+func NewConn(conn *websocket.Conn) *Conn {
 	return &Conn{
-		Conn:     conn,
-		DataChan: dataChan,
-		stopCh:   make(chan struct{}),
+		Conn:   conn,
+		stopCh: make(chan struct{}),
 	}
 }

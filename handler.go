@@ -2,76 +2,142 @@ package wserver
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/websocket"
 )
 
 // websocketHandler defines to handle websocket upgrade request.
 type websocketHandler struct {
+	// upgrader is used to upgrade request.
 	upgrader *websocket.Upgrader
+
+	// binder stores relations about websocket connection and userID.
+	binder *binder
+
+	// calcUserIDFunc defines to calculate userID by token. The userID will
+	// be equal to token if this function is nil.
+	calcUserIDFunc func(token string) (userID string, err error)
 }
 
-// ServeHTTP will first try to upgrade connection to websocket. If success,
-// connection will be kept until client send close message.
+// registerMessage defines message struct client send after connection
+// to the server.
+type registerMessage struct {
+	Token string
+	Event string
+}
+
+// First try to upgrade connection to websocket. If success, connection will
+// be kept until client send close message.
 func (wh *websocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	conn, err := wh.upgrader.Upgrade(w, r, nil)
+	wsConn, err := wh.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
-	defer conn.Close()
+	defer wsConn.Close()
 
 	// handle Websocket request
-	dataCh := make(chan []byte)
-	wsConn := NewConn(conn, dataCh)
-	// TODO: set AfterReadFunc and BeforeCloseFunc
+	conn := NewConn(wsConn)
+	conn.AfterReadFunc = func(messageType int, r io.Reader) {
+		var rm registerMessage
+		decoder := json.NewDecoder(r)
+		if err := decoder.Decode(&rm); err != nil {
+			return
+		}
 
-	wsConn.Listen()
+		// calculate userID by token
+		userID := rm.Token
+		if wh.calcUserIDFunc != nil {
+			uID, err := wh.calcUserIDFunc(rm.Token)
+			if err != nil {
+				return
+			}
+			userID = uID
+		}
+
+		// bind
+		wh.binder.Bind(userID, rm.Event, conn)
+	}
+	conn.BeforeCloseFunc = func() {
+		// unbind
+		wh.binder.Unbind(conn)
+	}
+
+	conn.Listen()
 }
 
+// ErrRequestIllegal describes error when data of the request is unaccepted.
+var ErrRequestIllegal = errors.New("request data illegal")
+
+// sendHandler defines to handle send message request.
 type sendHandler struct {
-	SendHeadKey   string
-	SendHeadValue string
+	// authFunc defines to authorize request. The request will proceed only
+	// when it returns true.
+	authFunc func(r *http.Request) bool
+
+	binder *binder
 }
 
+// Authorize if needed. Then decode the request and send message to each
+// realted websocket connection.
 func (s *sendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	// 验证头信息
-	if r.Header.Get(s.SendHeadKey) != s.SendHeadValue {
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(fmt.Sprintf("头信息 %s 值不正确", s.SendHeadKey)))
-		return
+	// authorize
+	if s.authFunc != nil {
+		if ok := s.authFunc(r); !ok {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 	}
 
-	// 读取请求
-	var sMsg sendMsg
+	// read request
+	var sm sendMessage
 	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&sMsg); err != nil {
+	if err := decoder.Decode(&sm); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("数据不合法"))
+		w.Write([]byte(ErrRequestIllegal.Error()))
 		return
 	}
 
-	// 验证请求数据
-	if sMsg.EmployeeID <= 0 || sMsg.Event == "" || sMsg.Message == "" {
+	// validate the data
+	if sm.UserID == "" || sm.Event == "" || sm.Message == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte("数据不合法"))
+		w.Write([]byte(ErrRequestIllegal.Error()))
 		return
 	}
 
-	// 发送请求
-	go sendMessage(sMsg.EmployeeID, sMsg.Event, []byte(sMsg.Message))
+	// filter connections by userID and event, then send message
+	conns, err := s.binder.FilterConn(sm.UserID, sm.Event)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	cnt := 0
+	for i := range conns {
+		_, err := conns[i].Write([]byte(sm.Message))
+		if err != nil {
+			s.binder.Unbind(conns[i])
+			continue
+		}
+		cnt++
+	}
 
-	w.Write([]byte("推送成功"))
+	result := strings.NewReader(fmt.Sprintf("message sent to %d clients", cnt))
+	io.Copy(w, result)
 }
 
-type sendMsg struct {
-	EmployeeID int64 `json:"employeeId"`
-	Event      string
-	Message    string
+// sendMessage defines message struct send by client to push to each connected
+// websocket client.
+type sendMessage struct {
+	UserID  string `json:"userId"`
+	Event   string
+	Message string
 }
