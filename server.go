@@ -35,7 +35,7 @@ type Server struct {
 	//
 	// If Upgrader is nil, default upgrader will be used. Default upgrader is
 	// set ReadBufferSize and WriteBufferSize to 1024, and CheckOrigin always
-	// returns true
+	// returns true.
 	Upgrader *websocket.Upgrader
 }
 

@@ -44,7 +44,7 @@ func (c *Conn) GetID() string {
 
 // Listen listens for receive data from websocket connection. It blocks
 // until websocket connection is closed.
-func (c *Conn) Listen() (err error) {
+func (c *Conn) Listen() {
 	c.Conn.SetCloseHandler(func(code int, text string) error {
 		if c.BeforeCloseFunc != nil {
 			c.BeforeCloseFunc()
@@ -56,7 +56,6 @@ func (c *Conn) Listen() (err error) {
 	})
 
 	c.read()
-	return nil
 }
 
 // Keeps reading from Conn util get error.
