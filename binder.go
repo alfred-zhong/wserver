@@ -6,7 +6,7 @@ import (
 	"sync"
 )
 
-// eventConn wraps Conn with a specifed event type.
+// eventConn wraps Conn with a specified event type.
 type eventConn struct {
 	Event string
 	Conn  *Conn
@@ -97,7 +97,7 @@ func (b *binder) Unbind(conn *Conn) error {
 	return fmt.Errorf("can't find the eventConns by userID: %s", userID)
 }
 
-// FilterConn searchs the conns related to userID, and filtered by
+// FilterConn searches the conns related to userID, and filtered by
 // event. The userID can't be empty. All the conns related to the userID
 // will be returned if the event is empty.
 func (b *binder) FilterConn(userID, event string) ([]*Conn, error) {
