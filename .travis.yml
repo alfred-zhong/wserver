@@ -1,0 +1,12 @@
+language: go
+
+go:
+  - "1.10"
+  - "1.9"
+
+install:
+  - go get github.com/google/uuid
+  - go get github.com/gorilla/websocket
+
+script:
+  - go test ./...
