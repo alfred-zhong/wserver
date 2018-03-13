@@ -37,6 +37,15 @@ type Server struct {
 	// set ReadBufferSize and WriteBufferSize to 1024, and CheckOrigin always
 	// returns true.
 	Upgrader *websocket.Upgrader
+
+	// Check token if it's valid and return userID. If token is invalid, err
+	// should not be nil.
+	AuthToken func(token string) (userID string, err error)
+
+	// Authorize send request. Message will be sent if it returns true,
+	// otherwise the request will be discarded. Default nil and send request
+	// will always be accepted.
+	SendAuth func(r *http.Request) bool
 }
 
 // Listen listens on the TCP network address addr.
@@ -48,17 +57,23 @@ func (s *Server) Listen(addr string) error {
 
 	// websocket request handler
 	wh := websocketHandler{
-		upgrader: s.Upgrader,
+		upgrader: defaultUpgrader,
 		binder:   b,
 	}
-	if wh.upgrader == nil {
-		wh.upgrader = defaultUpgrader
+	if s.Upgrader != nil {
+		wh.upgrader = s.Upgrader
+	}
+	if s.AuthToken != nil {
+		wh.calcUserIDFunc = s.AuthToken
 	}
 	http.Handle(s.WSPath, &wh)
 
 	// send request handler
 	sh := sendHandler{
 		binder: b,
+	}
+	if s.SendAuth != nil {
+		sh.authFunc = s.SendAuth
 	}
 	http.Handle(s.SendPath, &sh)
 
@@ -81,12 +96,10 @@ func (s Server) check() error {
 }
 
 // NewServer creates a new Server.
-//
-// WSPath and SendPath can't be empty.
-func NewServer(WSPath, SendPath string) *Server {
+func NewServer() *Server {
 	return &Server{
-		WSPath:   WSPath,
-		SendPath: SendPath,
+		WSPath:   serverDefaultWSPath,
+		SendPath: serverDefaultSendPath,
 	}
 }
 
