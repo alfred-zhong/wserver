@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>WebSocket Push Test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+
+<body>
+    <script>
+        var wsuri = "ws://127.0.0.1:{{ .Port }}/ws";
+        var sock = new WebSocket(wsuri);
+        var token = "{{ .Token }}";
+        var e = "{{ .Event }}";
+
+        sock.onopen = function () {
+            console.log("connected to " + wsuri);
+            sock.send("{\"token\": \"" + token + "\", \"event\": \"" + e + "\"}")
+        };
+        sock.onclose = function (e) {
+            console.log("connection closed (" + e.code + ")");
+        };
+        sock.onmessage = function (e) {
+            console.log("Receive message: " + e.data);
+        };
+    </script>
+</body>
+
+</html>
