@@ -12,11 +12,12 @@ import (
 	"time"
 
 	"github.com/alfred-zhong/wserver"
+	"github.com/google/uuid"
 )
 
 func main() {
 	port := 12345
-	userID := "476B40DD-DFE9-4CDE-AD4F-F0A53FE18FA5"
+	userID := uuid.New().String()
 	event := "alarm"
 
 	// run wserver
