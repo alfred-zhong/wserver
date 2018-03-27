@@ -114,15 +114,30 @@ func (s *sendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// filter connections by userID and event, then send message
-	conns, err := s.binder.FilterConn(sm.UserID, sm.Event)
+	cnt, err := s.send(sm.UserID, sm.Event, sm.Message)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
 		return
+	}
+
+	result := strings.NewReader(fmt.Sprintf("message sent to %d clients", cnt))
+	io.Copy(w, result)
+}
+
+func (s *sendHandler) send(userID, event, message string) (int, error) {
+	if userID == "" || event == "" || message == "" {
+		return 0, errors.New("parameters(userId, event, message) can't be empty")
+	}
+
+	// filter connections by userID and event, then send message
+	conns, err := s.binder.FilterConn(userID, event)
+	if err != nil {
+		return 0, fmt.Errorf("filter conn fail: %v", err)
 	}
 	cnt := 0
 	for i := range conns {
-		_, err := conns[i].Write([]byte(sm.Message))
+		_, err := conns[i].Write([]byte(message))
 		if err != nil {
 			s.binder.Unbind(conns[i])
 			continue
@@ -130,8 +145,7 @@ func (s *sendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		cnt++
 	}
 
-	result := strings.NewReader(fmt.Sprintf("message sent to %d clients", cnt))
-	io.Copy(w, result)
+	return cnt, nil
 }
 
 // sendMessage defines message struct send by client to push to each connected

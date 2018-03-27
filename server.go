@@ -46,6 +46,9 @@ type Server struct {
 	// otherwise the request will be discarded. Default nil and send request
 	// will always be accepted.
 	SendAuth func(r *http.Request) bool
+
+	wh *websocketHandler
+	sh *sendHandler
 }
 
 // Listen listens on the TCP network address addr.
@@ -66,7 +69,8 @@ func (s *Server) Listen(addr string) error {
 	if s.AuthToken != nil {
 		wh.calcUserIDFunc = s.AuthToken
 	}
-	http.Handle(s.WSPath, &wh)
+	s.wh = &wh
+	http.Handle(s.WSPath, s.wh)
 
 	// send request handler
 	sh := sendHandler{
@@ -75,9 +79,15 @@ func (s *Server) Listen(addr string) error {
 	if s.SendAuth != nil {
 		sh.authFunc = s.SendAuth
 	}
-	http.Handle(s.SendPath, &sh)
+	s.sh = &sh
+	http.Handle(s.SendPath, s.sh)
 
 	return http.ListenAndServe(addr, nil)
+}
+
+// Push filters connections by userID and event, then write message
+func (s *Server) Push(userID, event, message string) (int, error) {
+	return s.sh.send(userID, event, message)
 }
 
 // Check parameters of Server, returns error if fail.
