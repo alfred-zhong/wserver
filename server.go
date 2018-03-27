@@ -24,6 +24,9 @@ var defaultUpgrader = &websocket.Upgrader{
 
 // Server defines parameters for running websocket server.
 type Server struct {
+	// Address for server to listen on
+	Addr string
+
 	// Path for websocket request, default "/ws".
 	WSPath string
 
@@ -51,8 +54,9 @@ type Server struct {
 	sh *sendHandler
 }
 
-// Listen listens on the TCP network address addr.
-func (s *Server) Listen(addr string) error {
+// ListenAndServe listens on the TCP network address and handle websocket
+// request.
+func (s *Server) ListenAndServe() error {
 	b := &binder{
 		userID2EventConnMap: make(map[string]*[]eventConn),
 		connID2UserIDMap:    make(map[string]string),
@@ -82,7 +86,7 @@ func (s *Server) Listen(addr string) error {
 	s.sh = &sh
 	http.Handle(s.SendPath, s.sh)
 
-	return http.ListenAndServe(addr, nil)
+	return http.ListenAndServe(s.Addr, nil)
 }
 
 // Push filters connections by userID and event, then write message
@@ -106,8 +110,9 @@ func (s Server) check() error {
 }
 
 // NewServer creates a new Server.
-func NewServer() *Server {
+func NewServer(addr string) *Server {
 	return &Server{
+		Addr:     addr,
 		WSPath:   serverDefaultWSPath,
 		SendPath: serverDefaultSendPath,
 	}

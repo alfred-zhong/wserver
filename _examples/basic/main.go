@@ -22,8 +22,8 @@ func main() {
 
 	// run wserver
 	go func() {
-		s := wserver.NewServer()
-		if err := s.Listen(":" + strconv.Itoa(port)); err != nil {
+		s := wserver.NewServer(":" + strconv.Itoa(port))
+		if err := s.ListenAndServe(); err != nil {
 			log.Fatalln(err)
 		}
 	}()
