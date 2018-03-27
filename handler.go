@@ -24,9 +24,9 @@ type websocketHandler struct {
 	calcUserIDFunc func(token string) (userID string, err error)
 }
 
-// registerMessage defines message struct client send after connection
+// RegisterMessage defines message struct client send after connection
 // to the server.
-type registerMessage struct {
+type RegisterMessage struct {
 	Token string
 	Event string
 }
@@ -43,7 +43,7 @@ func (wh *websocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// handle Websocket request
 	conn := NewConn(wsConn)
 	conn.AfterReadFunc = func(messageType int, r io.Reader) {
-		var rm registerMessage
+		var rm RegisterMessage
 		decoder := json.NewDecoder(r)
 		if err := decoder.Decode(&rm); err != nil {
 			return
