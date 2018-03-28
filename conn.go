@@ -29,7 +29,7 @@ type Conn struct {
 func (c *Conn) Write(p []byte) (n int, err error) {
 	select {
 	case <-c.stopCh:
-		return 0, errors.New("Conn is closed, can't be writen")
+		return 0, errors.New("Conn is closed, can't be written")
 	default:
 		err = c.Conn.WriteMessage(websocket.TextMessage, p)
 		if err != nil {
