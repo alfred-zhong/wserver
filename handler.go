@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -68,6 +69,35 @@ func (wh *websocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	conn.Listen()
+}
+
+// closeConns unbind conns filtered by userID and event and close them.
+// The userID can't be empty, but event can be empty. The event will be ignored
+// if empty.
+func (wh *websocketHandler) closeConns(userID, event string) (int, error) {
+	conns, err := wh.binder.FilterConn(userID, event)
+	if err != nil {
+		return 0, err
+	}
+
+	cnt := 0
+	for i := range conns {
+		// unbind
+		if err := wh.binder.Unbind(conns[i]); err != nil {
+			log.Printf("conn unbind fail: %v", err)
+			continue
+		}
+
+		// close
+		if err := conns[i].Close(); err != nil {
+			log.Printf("conn close fail: %v", err)
+			continue
+		}
+
+		cnt++
+	}
+
+	return cnt, nil
 }
 
 // ErrRequestIllegal describes error when data of the request is unaccepted.

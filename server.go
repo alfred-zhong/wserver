@@ -94,6 +94,12 @@ func (s *Server) Push(userID, event, message string) (int, error) {
 	return s.sh.send(userID, event, message)
 }
 
+// Drop find connections by userID and event, then close them. The userID can't
+// be empty. The event is ignored if it's empty.
+func (s *Server) Drop(userID, event string) (int, error) {
+	return s.wh.closeConns(userID, event)
+}
+
 // Check parameters of Server, returns error if fail.
 func (s Server) check() error {
 	if !checkPath(s.WSPath) {

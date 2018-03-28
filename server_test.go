@@ -27,6 +27,7 @@ func Test_Server_1(t *testing.T) {
 
 	// push message
 	registerCh := make(chan struct{})
+	pushCh := make(chan struct{})
 	go func() {
 		<-registerCh
 		for i := 0; i < count; i++ {
@@ -38,6 +39,12 @@ func Test_Server_1(t *testing.T) {
 
 			// time.Sleep(time.Microsecond)
 		}
+
+		if _, err := s.Drop(userID, ""); err != nil {
+			t.Errorf("drop connections fail: %v", err)
+		}
+
+		close(pushCh)
 	}()
 
 	// dial websocket
@@ -69,10 +76,10 @@ func Test_Server_1(t *testing.T) {
 		t.Logf("msg: %s", string(b))
 
 		cnt++
+	}
 
-		if cnt >= count {
-			break
-		}
+	if cnt != count {
+		t.Errorf("message received count: %d, expected %d", cnt, count)
 	}
 }
 

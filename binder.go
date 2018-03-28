@@ -97,9 +97,41 @@ func (b *binder) Unbind(conn *Conn) error {
 	return fmt.Errorf("can't find the eventConns by userID: %s", userID)
 }
 
+// FindConn trys to find Conn by ID.
+func (b *binder) FindConn(connID string) (*Conn, bool) {
+	if connID == "" {
+		return nil, false
+	}
+
+	userID, ok := b.connID2UserIDMap[connID]
+	// if userID been found by connID, then find the Conn using userID
+	if ok {
+		if eConns, ok := b.userID2EventConnMap[userID]; ok {
+			for i := range *eConns {
+				if (*eConns)[i].Conn.GetID() == connID {
+					return (*eConns)[i].Conn, true
+				}
+			}
+		}
+
+		return nil, false
+	}
+
+	// userID not found, iterate all the conns
+	for _, eConns := range b.userID2EventConnMap {
+		for i := range *eConns {
+			if (*eConns)[i].Conn.GetID() == connID {
+				return (*eConns)[i].Conn, true
+			}
+		}
+	}
+
+	return nil, false
+}
+
 // FilterConn searches the conns related to userID, and filtered by
-// event. The userID can't be empty. All the conns related to the userID
-// will be returned if the event is empty.
+// event. The userID can't be empty. The event will be ignored if it's empty.
+// All the conns related to the userID will be returned if the event is empty.
 func (b *binder) FilterConn(userID, event string) ([]*Conn, error) {
 	if userID == "" {
 		return nil, errors.New("userID can't be empty")
@@ -111,7 +143,7 @@ func (b *binder) FilterConn(userID, event string) ([]*Conn, error) {
 	if eConns, ok := b.userID2EventConnMap[userID]; ok {
 		ecs := make([]*Conn, 0, len(*eConns))
 		for i := range *eConns {
-			if (*eConns)[i].Event == event {
+			if event == "" || (*eConns)[i].Event == event {
 				ecs = append(ecs, (*eConns)[i].Conn)
 			}
 		}

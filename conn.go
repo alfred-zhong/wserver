@@ -1,7 +1,9 @@
 package wserver
 
 import (
+	"errors"
 	"io"
+	"log"
 	"sync"
 	"time"
 
@@ -25,11 +27,16 @@ type Conn struct {
 // Write write p to the websocket connection. The error returned will always
 // be nil if success.
 func (c *Conn) Write(p []byte) (n int, err error) {
-	err = c.Conn.WriteMessage(websocket.TextMessage, p)
-	if err != nil {
-		return 0, err
+	select {
+	case <-c.stopCh:
+		return 0, errors.New("Conn is closed, can't be writen")
+	default:
+		err = c.Conn.WriteMessage(websocket.TextMessage, p)
+		if err != nil {
+			return 0, err
+		}
+		return len(p), nil
 	}
-	return len(p), nil
 }
 
 // GetID returns the id generated using UUID algorithm.
@@ -50,6 +57,10 @@ func (c *Conn) Listen() {
 			c.BeforeCloseFunc()
 		}
 
+		if err := c.Close(); err != nil {
+			log.Println(err)
+		}
+
 		message := websocket.FormatCloseMessage(code, "")
 		c.Conn.WriteControl(websocket.CloseMessage, message, time.Now().Add(time.Second))
 		return nil
@@ -60,19 +71,35 @@ func (c *Conn) Listen() {
 
 // Keeps reading from Conn util get error.
 func (c *Conn) read() {
+ReadLoop:
 	for {
-		messageType, r, err := c.Conn.NextReader()
-		if err != nil {
-			// TODO: handle read error maybe
-			break
-		}
+		select {
+		case <-c.stopCh:
+			break ReadLoop
+		default:
+			messageType, r, err := c.Conn.NextReader()
+			if err != nil {
+				// TODO: handle read error maybe
+				break ReadLoop
+			}
 
-		if c.AfterReadFunc != nil {
-			c.AfterReadFunc(messageType, r)
+			if c.AfterReadFunc != nil {
+				c.AfterReadFunc(messageType, r)
+			}
 		}
 	}
+}
 
-	close(c.stopCh)
+// Close close the connection.
+func (c *Conn) Close() error {
+	select {
+	case <-c.stopCh:
+		return errors.New("Conn already been closed")
+	default:
+		c.Conn.Close()
+		close(c.stopCh)
+		return nil
+	}
 }
 
 // NewConn wraps conn.
