@@ -129,7 +129,7 @@ func (s *pushHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// read request
-	var pm pushMessage
+	var pm PushMessage
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&pm); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -178,9 +178,9 @@ func (s *pushHandler) push(userID, event, message string) (int, error) {
 	return cnt, nil
 }
 
-// pushMessage defines message struct send by client to push to each connected
+// PushMessage defines message struct send by client to push to each connected
 // websocket client.
-type pushMessage struct {
+type PushMessage struct {
 	UserID  string `json:"userId"`
 	Event   string
 	Message string
