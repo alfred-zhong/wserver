@@ -11,7 +11,7 @@ import (
 
 const (
 	serverDefaultWSPath   = "/ws"
-	serverDefaultSendPath = "/send"
+	serverDefaultPushPath = "/push"
 )
 
 var defaultUpgrader = &websocket.Upgrader{
@@ -30,8 +30,8 @@ type Server struct {
 	// Path for websocket request, default "/ws".
 	WSPath string
 
-	// Path for send message, default "/send".
-	SendPath string
+	// Path for push message, default "/push".
+	PushPath string
 
 	// Upgrader is for upgrade connection to websocket connection using
 	// "github.com/gorilla/websocket".
@@ -41,17 +41,17 @@ type Server struct {
 	// returns true.
 	Upgrader *websocket.Upgrader
 
-	// Check token if it's valid and return userID. If token is invalid, err
-	// should not be nil.
-	AuthToken func(token string) (userID string, err error)
+	// Check token if it's valid and return userID. If token is valid, userID
+	// must be returned and ok should be true. Otherwise ok should be false.
+	AuthToken func(token string) (userID string, ok bool)
 
-	// Authorize send request. Message will be sent if it returns true,
-	// otherwise the request will be discarded. Default nil and send request
+	// Authorize push request. Message will be sent if it returns true,
+	// otherwise the request will be discarded. Default nil and push request
 	// will always be accepted.
-	SendAuth func(r *http.Request) bool
+	PushAuth func(r *http.Request) bool
 
 	wh *websocketHandler
-	sh *sendHandler
+	ph *pushHandler
 }
 
 // ListenAndServe listens on the TCP network address and handle websocket
@@ -76,22 +76,22 @@ func (s *Server) ListenAndServe() error {
 	s.wh = &wh
 	http.Handle(s.WSPath, s.wh)
 
-	// send request handler
-	sh := sendHandler{
+	// push request handler
+	ph := pushHandler{
 		binder: b,
 	}
-	if s.SendAuth != nil {
-		sh.authFunc = s.SendAuth
+	if s.PushAuth != nil {
+		ph.authFunc = s.PushAuth
 	}
-	s.sh = &sh
-	http.Handle(s.SendPath, s.sh)
+	s.ph = &ph
+	http.Handle(s.PushPath, s.ph)
 
 	return http.ListenAndServe(s.Addr, nil)
 }
 
 // Push filters connections by userID and event, then write message
 func (s *Server) Push(userID, event, message string) (int, error) {
-	return s.sh.send(userID, event, message)
+	return s.ph.push(userID, event, message)
 }
 
 // Drop find connections by userID and event, then close them. The userID can't
@@ -105,11 +105,11 @@ func (s Server) check() error {
 	if !checkPath(s.WSPath) {
 		return fmt.Errorf("WSPath: %s not illegal", s.WSPath)
 	}
-	if !checkPath(s.SendPath) {
-		return fmt.Errorf("SendPath: %s not illegal", s.SendPath)
+	if !checkPath(s.PushPath) {
+		return fmt.Errorf("PushPath: %s not illegal", s.PushPath)
 	}
-	if s.WSPath == s.SendPath {
-		return errors.New("WSPath is equal to SendPath")
+	if s.WSPath == s.PushPath {
+		return errors.New("WSPath is equal to PushPath")
 	}
 
 	return nil
@@ -120,7 +120,7 @@ func NewServer(addr string) *Server {
 	return &Server{
 		Addr:     addr,
 		WSPath:   serverDefaultWSPath,
-		SendPath: serverDefaultSendPath,
+		PushPath: serverDefaultPushPath,
 	}
 }
 

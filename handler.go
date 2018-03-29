@@ -22,10 +22,10 @@ type websocketHandler struct {
 
 	// calcUserIDFunc defines to calculate userID by token. The userID will
 	// be equal to token if this function is nil.
-	calcUserIDFunc func(token string) (userID string, err error)
+	calcUserIDFunc func(token string) (userID string, ok bool)
 }
 
-// RegisterMessage defines message struct client send after connection
+// RegisterMessage defines message struct client send after connect
 // to the server.
 type RegisterMessage struct {
 	Token string
@@ -33,7 +33,7 @@ type RegisterMessage struct {
 }
 
 // First try to upgrade connection to websocket. If success, connection will
-// be kept until client send close message.
+// be kept until client send close message or server drop them.
 func (wh *websocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	wsConn, err := wh.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -53,8 +53,8 @@ func (wh *websocketHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// calculate userID by token
 		userID := rm.Token
 		if wh.calcUserIDFunc != nil {
-			uID, err := wh.calcUserIDFunc(rm.Token)
-			if err != nil {
+			uID, ok := wh.calcUserIDFunc(rm.Token)
+			if !ok {
 				return
 			}
 			userID = uID
@@ -103,8 +103,8 @@ func (wh *websocketHandler) closeConns(userID, event string) (int, error) {
 // ErrRequestIllegal describes error when data of the request is unaccepted.
 var ErrRequestIllegal = errors.New("request data illegal")
 
-// sendHandler defines to handle send message request.
-type sendHandler struct {
+// pushHandler defines to handle push message request.
+type pushHandler struct {
 	// authFunc defines to authorize request. The request will proceed only
 	// when it returns true.
 	authFunc func(r *http.Request) bool
@@ -112,9 +112,9 @@ type sendHandler struct {
 	binder *binder
 }
 
-// Authorize if needed. Then decode the request and send message to each
+// Authorize if needed. Then decode the request and push message to each
 // realted websocket connection.
-func (s *sendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *pushHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -129,22 +129,22 @@ func (s *sendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// read request
-	var sm sendMessage
+	var pm pushMessage
 	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&sm); err != nil {
+	if err := decoder.Decode(&pm); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(ErrRequestIllegal.Error()))
 		return
 	}
 
 	// validate the data
-	if sm.UserID == "" || sm.Event == "" || sm.Message == "" {
+	if pm.UserID == "" || pm.Event == "" || pm.Message == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(ErrRequestIllegal.Error()))
 		return
 	}
 
-	cnt, err := s.send(sm.UserID, sm.Event, sm.Message)
+	cnt, err := s.push(pm.UserID, pm.Event, pm.Message)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(err.Error()))
@@ -155,12 +155,12 @@ func (s *sendHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, result)
 }
 
-func (s *sendHandler) send(userID, event, message string) (int, error) {
+func (s *pushHandler) push(userID, event, message string) (int, error) {
 	if userID == "" || event == "" || message == "" {
 		return 0, errors.New("parameters(userId, event, message) can't be empty")
 	}
 
-	// filter connections by userID and event, then send message
+	// filter connections by userID and event, then push message
 	conns, err := s.binder.FilterConn(userID, event)
 	if err != nil {
 		return 0, fmt.Errorf("filter conn fail: %v", err)
@@ -178,9 +178,9 @@ func (s *sendHandler) send(userID, event, message string) (int, error) {
 	return cnt, nil
 }
 
-// sendMessage defines message struct send by client to push to each connected
+// pushMessage defines message struct send by client to push to each connected
 // websocket client.
-type sendMessage struct {
+type pushMessage struct {
 	UserID  string `json:"userId"`
 	Event   string
 	Message string
