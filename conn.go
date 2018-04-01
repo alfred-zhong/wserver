@@ -66,11 +66,7 @@ func (c *Conn) Listen() {
 		return nil
 	})
 
-	c.read()
-}
-
-// Keeps reading from Conn util get error.
-func (c *Conn) read() {
+	// Keeps reading from Conn util get error.
 ReadLoop:
 	for {
 		select {
