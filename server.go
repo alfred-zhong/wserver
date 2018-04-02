@@ -1,3 +1,4 @@
+// Package wserver provides building simple websocket server with message push.
 package wserver
 
 import (
